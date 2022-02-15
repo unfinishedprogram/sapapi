@@ -5,8 +5,7 @@ import Match from "./implementation/match";
 // const match = new Match(handler);
 
 async function play() {
-	const handler = new RequestHandler("16");
-	const match = new Match(handler);
+	const match = new Match(new RequestHandler("16"));
 	await match.init();
 	await match.enqueue();
 	await match.start();
