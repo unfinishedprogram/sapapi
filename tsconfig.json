@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+      "module": "CommonJS",
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "target": "es2019",
+      "noImplicitAny": true,
+      "moduleResolution": "node",
+      "sourceMap": true,
+      "outDir": "dist",
+      "baseUrl": "src/",
+      "paths": {
+          "*": [
+              "src/*"
+          ]
+      }
+  },
+  "include": [
+      "src/*"
+, "src/implementation/match.ts"  ]
+}
