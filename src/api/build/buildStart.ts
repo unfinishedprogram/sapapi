@@ -2,7 +2,7 @@ import RequestHandler from "../../requestHandler";
 import IBoardStart from "../../types/game/boardMoveHash";
 
 export interface IMoveData {
-	BoardFreezes: unknown,
+	BoardFreezes: unknown[],
 	BoardHash: number,
 	BoardOrders: unknown,
 	BuildId: string

@@ -31,28 +31,30 @@ export default class Match {
 		await registerGuest(this.handler).then(res => this.authToken = res.Token);
 		await this.syncState();
 	}
-
-	private petEmoji(pet:IMinion) {
-		if(pet){
-			return minionEmoji[minionNames[pet.Enum]];
-		}
-		return "➖"
-	}
-	
-	private foodEmoji(food:ISpell) {
-		if(food) {
-			return spellEmoji[spellNames[food.Enum]];
-		}
-		return "➖"
+	private printStats() {
+		return `🎚️ : ${this.gameState.ArenaMatch.Build.Board.Tier}
+🎲 : ${this.gameState.ArenaMatch.Build.Board.Turn}
+🏆 : ${this.gameState.ArenaMatch.Build.Board.Victories}
+🪙 : ${this.gameState.ArenaMatch.Build.Board.Gold}`
 	}
 
-	private petsToEmoji(pets: IMinion[]) {
-		return pets.map((pet:IMinion) => this.petEmoji(pet))
+	private printTeam() {
+		return this.gameState.ArenaMatch.Build.Board.Minions.Items.map((pet, i) => {
+			if(!pet) return `[${i}] ➖`;
+			return `[${i}] ${minionEmoji[minionNames[pet.Enum]]} (${pet.Attack.Permanent + pet.Attack.Temporary},${pet.Health.Permanent + pet.Health.Temporary})`
+		})
 	}
 
-	private foodsToEmoji(foods: ISpell[]) {
-		return foods.map((food:ISpell) => this.foodEmoji(food))
+	private printShopPets() {
+		return this.gameState.ArenaMatch.Build.Board.MinionShop.map(pet => {
+			return `[${pet.Id.Unique}] ${minionEmoji[minionNames[pet.Enum]]} (${pet.Attack.Permanent + pet.Attack.Temporary},${pet.Health.Permanent + pet.Health.Temporary})`
+		})
+	}
 
+	private printShopFood() {
+		return this.gameState.ArenaMatch.Build.Board.SpellShop.map(item => 
+			`[${item.Id.Unique}] ${spellEmoji[spellNames[item.Enum]]}`
+		)
 	}
 
 	getTeamPet(index:number): IMinion | null {
@@ -68,18 +70,49 @@ export default class Match {
 	}
 
 	private async syncState() {
-		this.gameState = await getCurrentUserInfo(this.handler, this.authToken)
+		this.gameState = await getCurrentUserInfo(this.handler, this.authToken);
+		if(this.gameState.ArenaMatch){
+			this.setHash(this.gameState.ArenaMatch.Build.Board.Hash);
+		}
 	}
 
+	getPetByUnique(unique:number) {
+		for(let minion of this.gameState.ArenaMatch.Build.Board.MinionShop) {
+			if(minion.Id.Unique == unique){
+				return minion;
+			}
+		}
+		for (let minion of this.gameState.ArenaMatch.Build.Board.Minions.Items) {
+			if(minion.Id.Unique == unique){
+				return minion;
+			}
+		}
+		return null;
+	}
+
+	getShopPetByUnique(unique:number) {
+		for(let minion of this.gameState.ArenaMatch.Build.Board.MinionShop) {
+			if(minion.Id.Unique == unique){
+				return minion;
+			}
+		}
+		return null;
+	}
 	async rollShop() {
-		await rollShop(this.handler, this.authToken, this.moveData);
+		await rollShop(this.handler, this.authToken, this.moveData).then(data => {
+			this.setHash(data.Data.Hash);
+		});
 		await this.syncState();
 	}
 	
-	async buyPet(shopIndex:number, teamIndex:number) {
-		const pet = this.getShopPet(shopIndex);
+	async buyPet(petId:number, teamIndex:number) {
+		console.log("Buying pet with id:", petId);
 
-		const playData = await playMinion(this.handler, this.authToken, {
+		const pet = this.getShopPetByUnique(petId);
+
+		console.log("Pet object", pet);
+
+		await playMinion(this.handler, this.authToken, {
 			Aim:null, 
 			Data:this.moveData,
 			MinionId: pet.Id,
@@ -87,8 +120,10 @@ export default class Match {
 				x:teamIndex,
 				y:0
 			}
+		}).then((dat) => {
+			console.log(dat);
+			this.setHash(dat.Data.Hash);
 		});
-		this.setHash(playData.Data.Hash);
 		await this.syncState();
 	}
 
@@ -105,12 +140,13 @@ export default class Match {
 	}
 
 	printBoard() {
+		console.log(this.printStats())
 		console.log("Team:")
-		console.log(this.petsToEmoji(this.gameState.ArenaMatch.Build.Board.Minions.Items), "\n")
+		console.log(this.printTeam().join("\n"), "\n")
 		console.log("Shop Pets:")
-		console.log(this.petsToEmoji(this.gameState.ArenaMatch.Build.Board.MinionShop), "\n")
+		console.log(this.printShopPets().join("\n"), "\n")
 		console.log("Shop Food:")
-		console.log(this.foodsToEmoji(this.gameState.ArenaMatch.Build.Board.SpellShop), "\n")
+		console.log(this.printShopFood().join("\n"), "\n")
 	}
 
 	async enqueue() {
@@ -122,7 +158,7 @@ export default class Match {
 				this.boardData = queueData.Build.Board;
 				this.moveData = {
 					BoardHash: queueData.Build.Board.Hash,
-					BoardFreezes: null,
+					BoardFreezes: [],
 					BoardOrders: null,
 					BuildId:this.buildId
 				}
@@ -133,6 +169,34 @@ export default class Match {
 
 	setHash(hash:number) {
 		this.moveData.BoardHash = hash
+	}
+
+	freeze(id:number) {
+		this.clearFreeze(id);
+		this.moveData.BoardFreezes.push(
+			{
+				ItemId:this.getPetByUnique(id).Id,
+				Freeze:true
+			}
+		)
+		console.log(this.moveData.BoardFreezes);
+	}
+
+	clearFreeze(id:number) {
+		this.moveData.BoardFreezes = this.moveData.BoardFreezes.filter((free:{ItemId:{Unique:number, BoardId:string},Freeze:boolean}) => free.ItemId.Unique != id);
+	}
+	
+
+
+	unfreeze(id:number) {
+		this.clearFreeze(id)
+		this.moveData.BoardFreezes.push(
+			{
+				ItemId:this.getPetByUnique(id).Id,
+				Freeze:false
+			}
+		)
+		console.log(this.moveData.BoardFreezes);
 	}
 
 	async start() {

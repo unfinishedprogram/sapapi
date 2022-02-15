@@ -18,4 +18,5 @@ export default interface IMinion {
 	Perk: null
 	Point: {x: number, y: number}
 	Price: number
+	Unique:number
 }
