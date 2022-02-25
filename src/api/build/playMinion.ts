@@ -13,8 +13,6 @@ export interface IPlayMinionData {
 }
 
 export default async function playMinion(handler:RequestHandler, token:string, playMinionData:IPlayMinionData) {
-	console.log("Playing minion");
-
   return handler.getRequest<IBoardStart>()
     .setPath("build/play-minion")
     .setMethod("POST")

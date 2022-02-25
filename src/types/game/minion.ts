@@ -9,7 +9,7 @@ export default interface IMinion {
 	DestroyedBy: null
 	Enum: number
 	Exp: number
-	Frozen: false
+	Frozen: boolean
 	Health: {Permanent: number, Temporary: number}
 	Id: {BoardId: string, Unique: number}
 	Level: number

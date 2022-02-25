@@ -15,8 +15,6 @@ export interface IPlaySpellData {
 }
 
 export default async function playSpell(handler:RequestHandler, token:string, playSpellData:IPlaySpellData) {
-	console.log("Playing minion");
-
   return handler.getRequest<IBoardStart>()
     .setPath("build/play-spell")
     .setMethod("POST")

@@ -32,7 +32,6 @@ class RequestBuilder<T> {
 		return this;
 	}
 
-
 	setMethod(method:RequestMethod) {
 		this.method = method;
 		if(method != "GET") {
@@ -63,14 +62,19 @@ class RequestBuilder<T> {
 		this.requestOptions.headers = this.headers;
 		this.requestOptions.method = this.method;
 
-		if(this.method != "GET" && this.body) this.requestOptions.body = JSON.stringify(this.body);
+		if(this.method != "GET" && this.body){
+			this.requestOptions.body = JSON.stringify(this.body);
+		} 
+		const fullUrl = `${this.endpointURL}${this.path}`
 
-
-		return fetch(
-			`${this.endpointURL}${this.path}`, 
-			this.requestOptions
-		)
-		.then(data => data.json() as Promise<T>);
+		const response = await fetch(fullUrl,this.requestOptions)
+		if(response.ok) {
+			return await response.json() as Promise<T>;
+		} else {
+			return new Promise((res, rej) => {
+				rej(response.text);
+			})
+		}
 	}
 }
 
