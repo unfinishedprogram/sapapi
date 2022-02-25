@@ -10,7 +10,7 @@ export default function choseAccountMenu (window:GameDisplay) {
 	let guestButton = Button({ content: "Guest" });
 	let exit = Button({ content: "Exit" });
 
-	let menu = verticalList([loginButton, registerButton, guestButton, exit], {
+	let menu = verticalList([ loginButton, registerButton, guestButton, exit ], {
 		mouse: true,
 		label: "Home",
 		left: "center",

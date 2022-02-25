@@ -1,9 +1,6 @@
-import { triggerAsyncId } from "async_hooks";
 import * as blessed from "blessed"
 import GameDisplay from "../gameDisplay";
 import chooseAccountMenu from "../menus/chooseAccountMenu"
-
-let i = 0;
 
 interface ILoginCallback {
 	(email:string, password:string): void 
