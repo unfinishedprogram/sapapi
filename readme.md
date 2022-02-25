@@ -9,15 +9,3 @@
 | 4    | 🐋🦬🦌🐬🦛🐧🐓🦨🐿️🪱🦜|🐃🦙  | 🥫🍐   |
 | 5    | 🐒🐄🐊🦏🦂🦭🦈🦃      | 🐐🦅  | 🌶️🍫🍣  |
 | 6    | 🐗🐈🐉🪰🦍🐆🦣🐍🐅    |🐙🦖   | 🍈🍄🍕🥩 |
-
-```ts
-export interface IBuildData {
-	BoardFreezes: unknown,
-	BoardHash: number,
-	BoardOrders: unknown,
-	BuildId: number
-}
-
-
-
-```
