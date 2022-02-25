@@ -6,8 +6,6 @@ import IActionData from "../types/game/actionData";
 import buildStart, { IMoveData } from "../api/build/buildStart"
 import playMinion from "../api/build/playMinion"
 import playSpell from "../api/build/playSpell"
-import {minionNames, minionEmoji} from "../data/minions"
-import {spellNames, spellEmoji} from "../data/spells"
 import getCurrentUserInfo from "../api/user/currentUserInfo"
 import IUserInfo  from "../types/userInfo";
 import rollShop from "../api/build/rollShop"
@@ -16,18 +14,19 @@ import ready from "../api/arena/ready"
 import battle from "../api/arena/battle"
 import watch from "../api/arena/watch"
 import Board from "../implementation/board"
-import IItemId from "types/game/itemId";
-
+import IItemId from "../types/game/itemId";
+import IBoardOrders from "../types/game/boardOrders"
+import IBoardFreezes from "types/game/boardFreezes";
 export default class Match {
 	requestHandler:RequestHandler = new RequestHandler("16");
 	authToken:string;
 	lastActionData:IActionData;
-	moveData: IMoveData;
 	gameState:IUserInfo;
 	buildId:string;
 	boardId:string;
 	participationId:string;
 	board:Board;
+	boardHash:number;
 
 	onError:(message:string) => void = _ => {};
 
@@ -38,7 +37,8 @@ export default class Match {
 	}
 
 	async loginAsGuest() {
-		await registerGuest(this.handler).then(res => this.authToken = res.Token);
+		const accountInfo = await registerGuest(this.handler);
+		this.authToken = accountInfo.Token;
 		await this.syncState();
 	}
 
@@ -55,21 +55,6 @@ export default class Match {
 		return 10 - this.gameState.ArenaMatch.Build.Board.Losses;
 	}
 
-	private printStats() {
-		return `\
-🎚️ : ${this.gameState.ArenaMatch.Build.Board.Tier}
-🎲 : ${this.gameState.ArenaMatch.Build.Board.Turn}
-🏆 : ${this.gameState.ArenaMatch.Build.Board.Victories}
-🪙 : ${this.gameState.ArenaMatch.Build.Board.Gold}`
-	}
-
-	private printTeam() {
-		return this.gameState.ArenaMatch.Build.Board.Minions.Items.map((pet, i) => {
-			if(!pet) return `[${i}] ➖`;
-			return `[${i}] ${minionEmoji[minionNames[pet.Enum]]} (${pet.Attack.Permanent + pet.Attack.Temporary},${pet.Health.Permanent + pet.Health.Temporary})`
-		})
-	}
-
 	get shopPets () {
 		return this.gameState.ArenaMatch.Build.Board.MinionShop;
 	}
@@ -80,38 +65,22 @@ export default class Match {
 		return this.gameState.ArenaMatch.Build.Board.Minions.Items;
 	}
 
-	private printShopPets() {
-		return this.gameState.ArenaMatch.Build.Board.MinionShop.map(pet => {
-			return `[${pet.Id.Unique}] ${minionEmoji[minionNames[pet.Enum]]} (${pet.Attack.Permanent + pet.Attack.Temporary},${pet.Health.Permanent + pet.Health.Temporary})`
-		})
-	}
-
-	private printShopFood() {
-		return this.gameState.ArenaMatch.Build.Board.SpellShop.map(item => 
-			`[${item.Id.Unique}] ${spellEmoji[spellNames[item.Enum]]}`
-		)
-	}
-
 	async endBuild() {
-		this.setHash((await endBuild(this.handler, this.authToken, this.moveData)).Data.Hash);
-		const battleId = (await ready(this.handler,this.authToken, this.participationId)).BattleId;
-		await this.handleBattle(battleId);
-		await watch(this.handler, this.authToken, this.participationId);
-		await this.start();
-	}
-
-	async handleBattle(battleId:string) {
-		await battle(this.handler, this.authToken, battleId);
-	}
-
-	async ready() {
-		let battleId = (await ready(this.handler, this.authToken, this.participationId)).BattleId;
-		await this.syncState();
+		try {
+			const data = await endBuild(this.handler, this.authToken, this.moveData);
+			this.setHash(data.Data.Hash);
+			const battleInfo = await ready(this.handler, this.authToken, this.participationId);
+			const battleId = battleInfo.BattleId;
+			await battle(this.handler, this.authToken, battleId);
+			await watch(this.handler, this.authToken, this.participationId);
+			await this.start();
+		} catch(e) {
+			this.logError(e);
+		}
 	}
 
 	private async syncState() {
 		this.gameState = await getCurrentUserInfo(this.handler, this.authToken);
-
 		if(this.gameState.ArenaMatch){
 			this.setHash(this.gameState.ArenaMatch.Build.Board.Hash);
 			this.board = new Board(this.gameState.ArenaMatch.Build.Board);
@@ -141,13 +110,17 @@ export default class Match {
 		return null;
 	}
 
-	getShopItemByUnique(unique:number) {
+	getShopFoodByUnique(unique:number) {
 		for(let spell of this.gameState.ArenaMatch.Build.Board.SpellShop) {
 			if(spell.Id.Unique == unique){
 				return spell;
 			}
 		}
 		return null;
+	}
+
+	getShopItemById(id:IItemId) {
+		return this.getShopPetByUnique(id.Unique) || this.getShopFoodByUnique(id.Unique)
 	}
 
 	async rollShop() {
@@ -183,59 +156,62 @@ export default class Match {
 		await this.syncState();
 	}
 
+	get moveData ():IMoveData {
+		return {
+			BoardHash: this.boardHash,
+			BoardFreezes: this.getBoardFreezes(),
+			BoardOrders: this.getBoardOrders(),
+			BuildId:this.buildId
+		}
+	}
 	async enqueue() {
 		await enterArenaQueue(this.handler, this.authToken)
 			.then(queueData => {
 				this.participationId = queueData.ParticipationId;
 				this.buildId = queueData.Build.Id;
-				this.moveData = {
-					BoardHash: queueData.Build.Board.Hash,
-					BoardFreezes: [],
-					BoardOrders: null,
-					BuildId:this.buildId
-				}
+				this.setHash(queueData.Build.Board.Hash);
 			}
 		);
 		await this.syncState();
 	}
 
 	setHash(hash:number) {
-		this.moveData.BoardHash = hash;
+		this.boardHash = hash;
 	}
+	
 
 	freeze(id:IItemId) {
-		this.clearFreeze(id);
-		let item = this.getShopPetByUnique(id.Unique) || this.getShopItemByUnique(id.Unique);
-		item.Frozen = true;		
-		this.moveData.BoardFreezes.push(
-			{
-				ItemId:id,
-				Freeze:true
-			}
-		)
-	}
-
-	clearFreeze(id:IItemId) {
-		this.moveData.BoardFreezes = this.moveData.BoardFreezes.filter((free:{ItemId:IItemId,Freeze:boolean}) => free.ItemId.Unique != id.Unique);
+		this.getShopItemById(id).Frozen = true;
 	}
 	
 	unfreeze(id:IItemId) {
-		this.clearFreeze(id)
-
-		let item = this.getShopPetByUnique(id.Unique) || this.getShopItemByUnique(id.Unique);
-		item.Frozen = false;
-
-		this.moveData.BoardFreezes.push(
-			{
-				ItemId:id,
-				Freeze:false
-			}
-		)
+		this.getShopItemById(id).Frozen = false;
 	}
 
 	async start() {
 		await buildStart(this.handler, this.authToken, this.moveData)
 			.then(data => this.setHash(data.Data.Hash))
 		await this.syncState()
+	}
+
+	getBoardOrders():IBoardOrders {
+		return this.board.minions.filter(minion => minion).map(
+			minion => {
+				return {
+					MinionId:minion.Id,
+					Point:minion.Point,
+				}
+			}
+		)
+	}
+
+	getBoardFreezes():IBoardFreezes {
+		let items = [...this.shopFood, ...this.shopPets];
+		return items.map(item => {
+			return {
+				ItemId:item.Id,
+				Freeze:item.Frozen
+			}
+		})
 	}
 }

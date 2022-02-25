@@ -1,10 +1,12 @@
+import IBoardOrders from "../../types/game/boardOrders";
+import IBoardFreezes from "../../types/game/boardFreezes";
 import RequestHandler from "../../requestHandler";
 import IBoardStart from "../../types/game/boardMoveHash";
 
 export interface IMoveData {
-	BoardFreezes: unknown[],
+	BoardFreezes: IBoardFreezes,
+	BoardOrders: IBoardOrders,
 	BoardHash: number,
-	BoardOrders: unknown,
 	BuildId: string
 }
 

@@ -32,7 +32,7 @@ export default class BuildMenu  {
 
 		freeze.on("click", async () => {
 			if(this.shopSelected){
-				if(window.match.getShopPetByUnique(this.shopSelected.Unique).Frozen) {
+				if(window.match.getShopItemById(this.shopSelected).Frozen) {
 					window.match.unfreeze(this.shopSelected)
 				}else {
 					window.match.freeze(this.shopSelected)
